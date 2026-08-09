@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { calculateTwoHandScale, calculateWristRotation, mapHandMotionToColor } from './domain/gestures'
+import { calculateTwoHandScale, calculateWristRotation, mapHandMotionToColor, type GestureName } from './domain/gestures'
 import { DJ_SHAPES, MATERIALS, MODES, type DjShape, type GestureFrame, type MaterialPreset, type Mode, type TrackedHand } from './domain/instrument'
 import { useHandTracking } from './hooks/useHandTracking'
 import { usePrefersReducedMotion } from './hooks/usePrefersReducedMotion'
@@ -7,8 +7,8 @@ import { Stage } from './components/Stage'
 import './App.css'
 
 const modeOrder: Mode[] = ['SCULPT', 'DJ', 'PHYSICS']
-const demoGestures = ['pinch', 'neutral', 'open-palm', 'fist', 'point']
-const fingerCountByGesture: Record<string, number> = {
+const demoGestures: GestureName[] = ['pinch', 'neutral', 'open-palm', 'fist', 'point']
+const fingerCountByGesture: Record<GestureName, number> = {
   pinch: 2,
   neutral: 2,
   'open-palm': 5,
@@ -74,7 +74,17 @@ function App() {
   const primaryHand = activeFrame.hands[0]
   const primaryGesture = primaryHand?.gesture
   const fallbackHand = demoFrame.hands[0]
-  const handForStage = primaryHand ?? fallbackHand
+  const handForStage: TrackedHand = primaryHand ?? (inputSource === 'demo' ? fallbackHand : {
+    id: 'idle-hand',
+    gesture: 'neutral',
+    fingerCount: 0,
+    x: 0.5,
+    y: 0.5,
+    depth: 0,
+    velocity: 0,
+    landmarks: [],
+  })
+  const primaryFingerCount = primaryHand?.fingerCount ?? null
   const modeInfo = MODES[mode]
   const motionColor = mapHandMotionToColor(handForStage.x, handForStage.y)
   const handScale = useMemo(() => {
@@ -99,7 +109,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (mode !== 'DJ' || inputSource !== 'camera' || !primaryHand || primaryHand.velocity < 0.5) return
+    if (mode !== 'DJ' || !primaryHand || primaryHand.velocity < 0.5) return
     const now = Date.now()
     if (now - lastSwipe.current < 700) return
     lastSwipe.current = now
@@ -109,8 +119,15 @@ function App() {
       return DJ_SHAPES[(index + direction + DJ_SHAPES.length) % DJ_SHAPES.length].id
     })
     showCue(direction > 0 ? 'Swipe right / next form' : 'Swipe left / previous form')
-  }, [inputSource, mode, primaryHand, showCue])
+  }, [mode, primaryHand, showCue])
 
+  useEffect(() => {
+    if (mode !== 'DJ' || primaryFingerCount === null || primaryFingerCount < 1 || primaryFingerCount > DJ_SHAPES.length) return
+    const nextShape = DJ_SHAPES[primaryFingerCount - 1].id
+    if (nextShape === djShape) return
+    setDjShape(nextShape)
+    showCue(`${DJ_SHAPES[primaryFingerCount - 1].label} / finger select`)
+  }, [djShape, mode, primaryFingerCount, showCue])
   useEffect(() => {
     if (mode !== 'PHYSICS' || !primaryGesture) return
     if (primaryGesture === 'open-palm') {
@@ -164,7 +181,7 @@ function App() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="PalmLab home">
+        <a className="brand" href={import.meta.env.BASE_URL} aria-label="PalmLab home">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /><i /></span>
           <span className="brand-word">PALMLAB</span>
           <span className="brand-subtitle">Gesture Playground</span>
@@ -270,7 +287,7 @@ function App() {
             <div className="stage-corner stage-corner-bl" aria-hidden="true" />
             <div className="stage-corner stage-corner-br" aria-hidden="true" />
             <div className="stage-overlay stage-overlay-top"><span>ORIGIN / 000</span><span>AXIS Y ↕</span></div>
-            <div className="stage-overlay stage-overlay-bottom"><span className="cue-text">{cue}</span><span>{mode === 'PHYSICS' && frozen ? 'FIELD PAUSED' : 'INTERACTION READY'}</span></div>
+            <div className="stage-overlay stage-overlay-bottom"><span className="cue-text" role="status" aria-live="polite">{cue}</span><span>{mode === 'PHYSICS' && frozen ? 'FIELD PAUSED' : 'INTERACTION READY'}</span></div>
             {inputSource === 'camera' && <div className={`camera-preview ${cameraStatus}`}><video ref={videoRef} muted autoPlay playsInline aria-label="Camera preview" /><span>{cameraStatus === 'live' ? 'LIVE INPUT' : cameraStatus === 'loading' ? 'LOADING TRACKER' : 'CAMERA'}</span></div>}
           </div>
           <div className="stage-caption"><span>{modeInfo.action}</span><span>{modeInfo.hint}</span><span className="caption-action">Click stage to interact <b>↗</b></span></div>
@@ -278,7 +295,7 @@ function App() {
 
         <aside className="signal-panel" aria-label="Hand signal telemetry">
           <div className="signal-heading"><span className="micro-label">TELEMETRY</span><span className={inputSource === 'camera' && cameraStatus === 'live' ? 'connection live' : 'connection'}><span className="status-dot" /> {inputSource === 'camera' ? cameraStatus.toUpperCase() : 'SIMULATED'}</span></div>
-          <div className="signal-hero" aria-live="polite">
+          <div className="signal-hero">
             <span className="micro-label">ACTIVE GESTURE</span>
             <strong>{primaryHand?.gesture?.replace('-', ' ') ?? (inputSource === 'camera' ? 'no hand' : 'searching')}</strong>
             <div className="signal-subline"><span>{inputSource === 'camera' ? 'MediaPipe tracker' : 'Demo hand / 01'}</span><span>{primaryHand ? `${primaryHand.fingerCount} fingers` : 'Awaiting signal'}</span></div>

@@ -195,6 +195,10 @@
   .footer-right { width: 100%; margin-left: 0; }
 }
 
+@media (max-width: 480px) {
+  .brand-subtitle { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
   .landmark, .meter-row b { transition: none; }

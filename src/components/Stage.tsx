@@ -4,6 +4,7 @@ import { useMemo, useRef } from 'react'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 import * as THREE from 'three'
 import type { DjShape, MaterialPreset, Mode } from '../domain/instrument'
+import type { GestureName } from '../domain/gestures'
 
 interface StageProps {
   mode: Mode
@@ -11,7 +12,7 @@ interface StageProps {
   djShape: DjShape
   handPosition: { x: number; y: number; depth: number; rotation: number; velocity: number }
   handScale: number
-  gesture: string
+  gesture: GestureName
   frozen: boolean
   cuePulse: number
 }
@@ -33,22 +34,27 @@ function CoreObject({ mode, material, shape, handPosition, handScale, gesture, f
     : new THREE.Color(materialColors[material])
 
   useFrame(({ clock }, delta) => {
-    if (!group.current || frozen || reducedMotion) return
+    if (!group.current || frozen) return
     const elapsed = clock.getElapsedTime()
     const gestureLift = gesture === 'pinch' ? 0.12 : gesture === 'open-palm' ? -0.04 : 0
     const pulse = cuePulse ? Math.max(0, 1 - (Date.now() - cuePulse) / 800) : 0
-    group.current.rotation.y += delta * (0.22 + handPosition.x * 0.28)
-    group.current.rotation.x = Math.sin(elapsed * 0.55) * 0.13 + handPosition.y * 0.08
+    if (!reducedMotion) {
+      group.current.rotation.y += delta * (0.22 + handPosition.x * 0.28)
+      group.current.rotation.x = Math.sin(elapsed * 0.55) * 0.13 + handPosition.y * 0.08
+      if (core.current && mode === 'SCULPT') core.current.rotation.z = Math.sin(elapsed * 0.3) * 0.18
+    } else {
+      group.current.rotation.x = handPosition.y * 0.08
+    }
     group.current.rotation.z = handPosition.rotation * 0.42
     group.current.position.x = (handPosition.x - 0.5) * 1.35
     group.current.position.z = -handPosition.depth * 1.8
-    group.current.position.y = Math.sin(elapsed * 0.8) * 0.08 + gestureLift
+    group.current.position.y = (reducedMotion ? 0 : Math.sin(elapsed * 0.8) * 0.08) + gestureLift
     group.current.scale.setScalar(handScale * (1 + pulse * 0.18 + handPosition.velocity * 0.08))
-    if (core.current && mode === 'SCULPT') {
-      core.current.rotation.z = Math.sin(elapsed * 0.3) * 0.18 + (handPosition.x - 0.5) * 0.7
-    }
   })
 
+  if (mode === 'SCULPT') {
+    return <SculptSurface color={color} handPosition={handPosition} handScale={handScale} gesture={gesture} frozen={frozen} reducedMotion={reducedMotion} />
+  }
   if (shape === 'particles') return <ParticleField frozen={frozen} color={color} pulse={cuePulse} reducedMotion={reducedMotion} />
 
   return (
@@ -59,19 +65,65 @@ function CoreObject({ mode, material, shape, handPosition, handScale, gesture, f
         {shape === 'torus' && <torusGeometry args={[0.78, 0.27, 24, 64]} />}
         <meshPhysicalMaterial
           color={color}
-          roughness={mode === 'SCULPT' ? 0.28 : 0.48}
+          roughness={0.48}
           metalness={material === 'chrome' ? 0.92 : material === 'ink' ? 0.62 : 0.18}
           clearcoat={0.6}
           clearcoatRoughness={0.18}
-          wireframe={mode === 'SCULPT'}
+          wireframe={false}
         />
       </mesh>
-      {mode === 'SCULPT' && (
-        <mesh rotation={[0, 0, Math.PI / 4]} scale={1.25}>
-          <icosahedronGeometry args={[1, 2]} />
-          <meshBasicMaterial color={handColor} wireframe transparent opacity={0.08} />
-        </mesh>
-      )}
+    </group>
+  )
+}
+
+function SculptSurface({ color, handPosition, handScale, gesture, frozen, reducedMotion }: {
+  color: THREE.Color
+  handPosition: StageProps['handPosition']
+  handScale: number
+  gesture: GestureName
+  frozen: boolean
+  reducedMotion: boolean
+}) {
+  const mesh = useRef<THREE.Mesh>(null)
+  const geometry = useMemo(() => new THREE.SphereGeometry(1.08, 36, 24), [])
+  const basePositions = useMemo(() => Float32Array.from(geometry.attributes.position.array), [geometry])
+
+  useFrame(({ clock }, delta) => {
+    if (!mesh.current || frozen) return
+    const positions = geometry.attributes.position
+    const values = positions.array as Float32Array
+    const targetX = (handPosition.x - 0.5) * 1.7
+    const targetY = (handPosition.y - 0.5) * -1.7
+    const strength = gesture === 'pinch' ? 0.16 + handPosition.velocity * 0.12 : 0
+    for (let index = 0; index < values.length; index += 3) {
+      const baseX = basePositions[index]
+      const baseY = basePositions[index + 1]
+      const baseZ = basePositions[index + 2]
+      const influence = Math.max(0, 1 - Math.hypot(baseX - targetX, baseY - targetY) / 1.25)
+      const push = influence * influence * strength
+      const blend = Math.min(1, delta * (reducedMotion ? 18 : 10))
+      values[index] += (baseX * (1 + push) - values[index]) * blend
+      values[index + 1] += (baseY * (1 + push) - values[index + 1]) * blend
+      values[index + 2] += (baseZ * (1 + push * 0.75) - values[index + 2]) * blend
+    }
+    positions.needsUpdate = true
+    mesh.current.position.x = (handPosition.x - 0.5) * 1.35
+    mesh.current.position.y = (reducedMotion ? 0 : Math.sin(clock.getElapsedTime() * 0.8) * 0.08) + (gesture === 'pinch' ? 0.12 : 0)
+    mesh.current.position.z = -handPosition.depth * 1.8
+    mesh.current.rotation.z = handPosition.rotation * 0.42
+    if (!reducedMotion) mesh.current.rotation.y += delta * 0.2
+    mesh.current.scale.setScalar(handScale * (1 + handPosition.velocity * 0.08))
+  })
+
+  return (
+    <group>
+      <mesh ref={mesh} geometry={geometry} castShadow receiveShadow>
+        <meshPhysicalMaterial color={color} roughness={0.28} metalness={0.76} clearcoat={0.65} wireframe />
+      </mesh>
+      <mesh scale={1.26} rotation={[0, 0, Math.PI / 4]}>
+        <icosahedronGeometry args={[1, 2]} />
+        <meshBasicMaterial color={handColor} wireframe transparent opacity={0.08} />
+      </mesh>
     </group>
   )
 }
@@ -91,10 +143,12 @@ function ParticleField({ frozen, color, pulse, reducedMotion }: { frozen: boolea
   }, [])
 
   useFrame(({ clock }, delta) => {
-    if (!points.current || frozen || reducedMotion) return
+    if (!points.current || frozen) return
     const pulseAmount = pulse ? Math.max(0, 1 - (Date.now() - pulse) / 800) : 0
-    points.current.rotation.y += delta * (0.12 + pulseAmount * 0.5)
-    points.current.rotation.x = Math.sin(clock.getElapsedTime() * 0.35) * 0.12
+    if (!reducedMotion) {
+      points.current.rotation.y += delta * (0.12 + pulseAmount * 0.5)
+      points.current.rotation.x = Math.sin(clock.getElapsedTime() * 0.35) * 0.12
+    }
     points.current.scale.setScalar(1 + pulseAmount * 0.3)
   })
 
@@ -108,7 +162,7 @@ function ParticleField({ frozen, color, pulse, reducedMotion }: { frozen: boolea
   )
 }
 
-function PhysicsBodies({ frozen, cuePulse, handPosition, gesture, reducedMotion }: { frozen: boolean; cuePulse: number; handPosition: StageProps['handPosition']; gesture: string; reducedMotion: boolean }) {
+function PhysicsBodies({ frozen, cuePulse, handPosition, gesture, reducedMotion }: { frozen: boolean; cuePulse: number; handPosition: StageProps['handPosition']; gesture: GestureName; reducedMotion: boolean }) {
   const group = useRef<THREE.Group>(null)
   const bodies = useMemo(() => Array.from({ length: 18 }, (_, index) => ({
     x: ((index * 17) % 9 - 4) * 0.22,
@@ -118,18 +172,21 @@ function PhysicsBodies({ frozen, cuePulse, handPosition, gesture, reducedMotion 
   })), [])
 
   useFrame(({ clock }, delta) => {
-    if (!group.current || frozen || reducedMotion) return
-    const elapsed = clock.getElapsedTime()
+    if (!group.current || frozen) return
+    const elapsed = reducedMotion ? 0 : clock.getElapsedTime()
     const burst = cuePulse ? Math.max(0, 1 - (Date.now() - cuePulse) / 800) : 0
     group.current.children.forEach((body, index) => {
       const seed = bodies[index]
       body.position.y = seed.y + Math.sin(elapsed * (0.7 + index * 0.03) + index) * 0.12
       const pinchPull = gesture === 'pinch' ? Math.max(0, 1 - index / bodies.length) * 0.18 : 0
-      body.position.x = seed.x + Math.cos(elapsed * 0.45 + index) * 0.08 + (handPosition.x - 0.5) * pinchPull
-      body.position.z = seed.z + Math.sin(elapsed * 0.4 + index) * 0.1 - handPosition.depth * pinchPull
+      const throwEnergy = Math.min(0.28, handPosition.velocity * 0.18)
+      body.position.x = seed.x + (reducedMotion ? 0 : Math.cos(elapsed * 0.45 + index) * 0.08) + (handPosition.x - 0.5) * pinchPull + throwEnergy * Math.sin(elapsed * 2 + index)
+      body.position.z = seed.z + (reducedMotion ? 0 : Math.sin(elapsed * 0.4 + index) * 0.1) - handPosition.depth * pinchPull + throwEnergy * Math.cos(elapsed * 1.6 + index)
       if (burst) body.position.multiplyScalar(1 + burst * 0.75)
-      body.rotation.x += delta * (0.4 + index * 0.02)
-      body.rotation.y += delta * 0.5
+      if (!reducedMotion) {
+        body.rotation.x += delta * (0.4 + index * 0.02)
+        body.rotation.y += delta * 0.5
+      }
     })
   })
 

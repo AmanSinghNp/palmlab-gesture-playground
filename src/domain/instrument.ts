@@ -1,3 +1,5 @@
+import type { GestureName } from './gestures'
+
 export type Mode = 'SCULPT' | 'DJ' | 'PHYSICS'
 export type InputSource = 'demo' | 'camera'
 export type MaterialPreset = 'chrome' | 'clay' | 'ink' | 'signal'
@@ -5,7 +7,7 @@ export type DjShape = 'cube' | 'sphere' | 'torus' | 'particles'
 
 export interface TrackedHand {
   id: string
-  gesture: string
+  gesture: GestureName
   fingerCount: number
   x: number
   y: number

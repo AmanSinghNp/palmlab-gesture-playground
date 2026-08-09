@@ -62,16 +62,25 @@ export function useHandTracking({ enabled, onFrame }: UseHandTrackingOptions) {
       }
       const { FilesetResolver, HandLandmarker } = await import('@mediapipe/tasks-vision')
       const vision = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm',
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
       )
-      const landmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
-        runningMode: 'VIDEO',
+      const options = {
+        baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' as const },
+        runningMode: 'VIDEO' as const,
         numHands: 2,
         minHandDetectionConfidence: 0.55,
         minHandPresenceConfidence: 0.55,
         minTrackingConfidence: 0.55,
-      })
+      }
+      let landmarker: import('@mediapipe/tasks-vision').HandLandmarker
+      try {
+        landmarker = await HandLandmarker.createFromOptions(vision, options)
+      } catch {
+        landmarker = await HandLandmarker.createFromOptions(vision, {
+          ...options,
+          baseOptions: { modelAssetPath: MODEL_URL, delegate: 'CPU' },
+        })
+      }
       if (currentRequest !== requestId.current) {
         landmarker.close()
         stream.getTracks().forEach((track) => track.stop())
@@ -83,6 +92,7 @@ export function useHandTracking({ enabled, onFrame }: UseHandTrackingOptions) {
       if (!videoRef.current) throw new Error('Camera preview is not ready.')
       videoRef.current.srcObject = stream
       await videoRef.current.play()
+      if (currentRequest !== requestId.current || !landmarkerRef.current) return
       setStatus('live')
 
       const detect = () => {
@@ -107,7 +117,7 @@ export function useHandTracking({ enabled, onFrame }: UseHandTrackingOptions) {
           const handedness = result.handedness[index]?.[0]?.categoryName === 'Left' ? 'Left' : 'Right'
           return {
             id: `${handedness.toLowerCase()}-${index}`,
-            gesture: classifyGesture(typedLandmarks),
+            gesture: classifyGesture(typedLandmarks, handedness),
             fingerCount: countExtendedFingers(typedLandmarks, handedness),
             x: center.x,
             y: 1 - center.y,

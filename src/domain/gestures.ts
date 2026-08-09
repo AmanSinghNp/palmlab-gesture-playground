@@ -36,13 +36,13 @@ export function countExtendedFingers(
   return extended + (thumbIsExtended ? 1 : 0)
 }
 
-export function classifyGesture(landmarks: NormalizedLandmark[]): GestureName {
+export function classifyGesture(landmarks: NormalizedLandmark[], handedness: 'Left' | 'Right' = 'Right'): GestureName {
   if (landmarks.length < 21) return 'neutral'
 
   const pinchDistance = distance(landmarks[4], landmarks[8])
   if (pinchDistance < 0.085) return 'pinch'
 
-  const extended = countExtendedFingers(landmarks)
+  const extended = countExtendedFingers(landmarks, handedness)
   if (extended >= 4) return 'open-palm'
   if (extended === 0) return 'fist'
   if (extended === 1 && landmarks[8].y < landmarks[6].y) return 'point'

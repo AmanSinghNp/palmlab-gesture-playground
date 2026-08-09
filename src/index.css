@@ -14,8 +14,8 @@
   --line: #2b352d;
   --line-bright: #3d4b3e;
   --ink: #eef4ed;
-  --muted: #8c9a8d;
-  --dim: #5e6a60;
+  --muted: #a5b0a5;
+  --dim: #7c897d;
   --signal: #c8ff35;
   --signal-soft: rgba(200, 255, 53, 0.12);
   --signal-line: rgba(200, 255, 53, 0.48);
@@ -27,6 +27,6 @@ html { min-width: 320px; background: var(--bg); }
 body { margin: 0; min-width: 320px; min-height: 100dvh; background: var(--bg); }
 button, input { font: inherit; }
 button { color: inherit; }
-button:focus-visible, a:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+button:focus-visible, a:focus-visible, [role='button']:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
 button { cursor: pointer; }
 #root { min-height: 100dvh; }
