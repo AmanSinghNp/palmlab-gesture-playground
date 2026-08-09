@@ -18,6 +18,7 @@ export function useHandTracking({ enabled, onFrame }: UseHandTrackingOptions) {
   const rafRef = useRef<number | null>(null)
   const onFrameRef = useRef(onFrame)
   const previousCenters = useRef(new Map<number, { x: number; y: number; timestamp: number }>())
+  const requestId = useRef(0)
   const [status, setStatus] = useState<CameraStatus>('idle')
   const [error, setError] = useState('')
 
@@ -26,6 +27,7 @@ export function useHandTracking({ enabled, onFrame }: UseHandTrackingOptions) {
   }, [onFrame])
 
   const stop = useCallback(() => {
+    requestId.current += 1
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     rafRef.current = null
     landmarkerRef.current?.close()
@@ -46,28 +48,35 @@ export function useHandTracking({ enabled, onFrame }: UseHandTrackingOptions) {
 
     setStatus('loading')
     setError('')
+    const currentRequest = ++requestId.current
 
+    let stream: MediaStream | null = null
     try {
-      const [{ landmarker }, stream] = await Promise.all([
-        import('@mediapipe/tasks-vision').then(async ({ FilesetResolver, HandLandmarker }) => {
-          const vision = await FilesetResolver.forVisionTasks(
-            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm',
-          )
-          const landmarker = await HandLandmarker.createFromOptions(vision, {
-            baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
-            runningMode: 'VIDEO',
-            numHands: 2,
-            minHandDetectionConfidence: 0.55,
-            minHandPresenceConfidence: 0.55,
-            minTrackingConfidence: 0.55,
-          })
-          return { landmarker }
-        }),
-        navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-        }),
-      ])
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+      })
+      if (currentRequest !== requestId.current) {
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
+      const { FilesetResolver, HandLandmarker } = await import('@mediapipe/tasks-vision')
+      const vision = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm',
+      )
+      const landmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: MODEL_URL, delegate: 'GPU' },
+        runningMode: 'VIDEO',
+        numHands: 2,
+        minHandDetectionConfidence: 0.55,
+        minHandPresenceConfidence: 0.55,
+        minTrackingConfidence: 0.55,
+      })
+      if (currentRequest !== requestId.current) {
+        landmarker.close()
+        stream.getTracks().forEach((track) => track.stop())
+        return
+      }
 
       landmarkerRef.current = landmarker
       streamRef.current = stream
@@ -113,6 +122,11 @@ export function useHandTracking({ enabled, onFrame }: UseHandTrackingOptions) {
       }
       rafRef.current = requestAnimationFrame(detect)
     } catch (cameraError) {
+      if (currentRequest !== requestId.current) {
+        stream?.getTracks().forEach((track) => track.stop())
+        return
+      }
+      stream?.getTracks().forEach((track) => track.stop())
       streamRef.current?.getTracks().forEach((track) => track.stop())
       streamRef.current = null
       const message = cameraError instanceof DOMException && cameraError.name === 'NotAllowedError'

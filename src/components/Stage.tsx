@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { Canvas } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 import * as THREE from 'three'
 import type { DjShape, MaterialPreset, Mode } from '../domain/instrument'
 
@@ -24,7 +25,7 @@ const materialColors: Record<MaterialPreset, string> = {
 
 const handColor = '#c8ff35'
 
-function CoreObject({ mode, material, shape, handPosition, handScale, gesture, frozen, cuePulse }: Omit<StageProps, 'djShape'> & { shape: DjShape }) {
+function CoreObject({ mode, material, shape, handPosition, handScale, gesture, frozen, cuePulse, reducedMotion }: Omit<StageProps, 'djShape'> & { shape: DjShape; reducedMotion: boolean }) {
   const group = useRef<THREE.Group>(null)
   const core = useRef<THREE.Mesh>(null)
   const color = mode === 'DJ'
@@ -32,7 +33,7 @@ function CoreObject({ mode, material, shape, handPosition, handScale, gesture, f
     : new THREE.Color(materialColors[material])
 
   useFrame(({ clock }, delta) => {
-    if (!group.current || frozen) return
+    if (!group.current || frozen || reducedMotion) return
     const elapsed = clock.getElapsedTime()
     const gestureLift = gesture === 'pinch' ? 0.12 : gesture === 'open-palm' ? -0.04 : 0
     const pulse = cuePulse ? Math.max(0, 1 - (Date.now() - cuePulse) / 800) : 0
@@ -48,7 +49,7 @@ function CoreObject({ mode, material, shape, handPosition, handScale, gesture, f
     }
   })
 
-  if (shape === 'particles') return <ParticleField frozen={frozen} color={color} pulse={cuePulse} />
+  if (shape === 'particles') return <ParticleField frozen={frozen} color={color} pulse={cuePulse} reducedMotion={reducedMotion} />
 
   return (
     <group ref={group}>
@@ -75,7 +76,7 @@ function CoreObject({ mode, material, shape, handPosition, handScale, gesture, f
   )
 }
 
-function ParticleField({ frozen, color, pulse }: { frozen: boolean; color: THREE.Color; pulse: number }) {
+function ParticleField({ frozen, color, pulse, reducedMotion }: { frozen: boolean; color: THREE.Color; pulse: number; reducedMotion: boolean }) {
   const points = useRef<THREE.Points>(null)
   const positions = useMemo(() => {
     const values = new Float32Array(520 * 3)
@@ -90,7 +91,7 @@ function ParticleField({ frozen, color, pulse }: { frozen: boolean; color: THREE
   }, [])
 
   useFrame(({ clock }, delta) => {
-    if (!points.current || frozen) return
+    if (!points.current || frozen || reducedMotion) return
     const pulseAmount = pulse ? Math.max(0, 1 - (Date.now() - pulse) / 800) : 0
     points.current.rotation.y += delta * (0.12 + pulseAmount * 0.5)
     points.current.rotation.x = Math.sin(clock.getElapsedTime() * 0.35) * 0.12
@@ -107,7 +108,7 @@ function ParticleField({ frozen, color, pulse }: { frozen: boolean; color: THREE
   )
 }
 
-function PhysicsBodies({ frozen, cuePulse, handPosition, gesture }: { frozen: boolean; cuePulse: number; handPosition: StageProps['handPosition']; gesture: string }) {
+function PhysicsBodies({ frozen, cuePulse, handPosition, gesture, reducedMotion }: { frozen: boolean; cuePulse: number; handPosition: StageProps['handPosition']; gesture: string; reducedMotion: boolean }) {
   const group = useRef<THREE.Group>(null)
   const bodies = useMemo(() => Array.from({ length: 18 }, (_, index) => ({
     x: ((index * 17) % 9 - 4) * 0.22,
@@ -117,7 +118,7 @@ function PhysicsBodies({ frozen, cuePulse, handPosition, gesture }: { frozen: bo
   })), [])
 
   useFrame(({ clock }, delta) => {
-    if (!group.current || frozen) return
+    if (!group.current || frozen || reducedMotion) return
     const elapsed = clock.getElapsedTime()
     const burst = cuePulse ? Math.max(0, 1 - (Date.now() - cuePulse) / 800) : 0
     group.current.children.forEach((body, index) => {
@@ -144,7 +145,7 @@ function PhysicsBodies({ frozen, cuePulse, handPosition, gesture }: { frozen: bo
   )
 }
 
-function StageScene({ mode, material, djShape, handPosition, handScale, gesture, frozen, cuePulse }: StageProps) {
+function StageScene({ mode, material, djShape, handPosition, handScale, gesture, frozen, cuePulse, reducedMotion }: StageProps & { reducedMotion: boolean }) {
   return (
     <>
       <color attach="background" args={['#111512']} />
@@ -154,7 +155,7 @@ function StageScene({ mode, material, djShape, handPosition, handScale, gesture,
       <pointLight position={[-3, 1, 2]} intensity={5} distance={8} color="#c8ff35" />
       <gridHelper args={[10, 20, '#304034', '#1e291f']} position={[0, -1.55, 0]} />
       {mode === 'PHYSICS' ? (
-        <PhysicsBodies frozen={frozen} cuePulse={cuePulse} handPosition={handPosition} gesture={gesture} />
+        <PhysicsBodies frozen={frozen} cuePulse={cuePulse} handPosition={handPosition} gesture={gesture} reducedMotion={reducedMotion} />
       ) : (
         <CoreObject
           mode={mode}
@@ -162,6 +163,7 @@ function StageScene({ mode, material, djShape, handPosition, handScale, gesture,
           shape={mode === 'SCULPT' ? 'sphere' : djShape}
           handPosition={handPosition}
           handScale={handScale}
+          reducedMotion={reducedMotion}
           gesture={gesture}
           frozen={frozen}
           cuePulse={cuePulse}
@@ -172,6 +174,8 @@ function StageScene({ mode, material, djShape, handPosition, handScale, gesture,
 }
 
 export function Stage(props: StageProps) {
+  const reducedMotion = usePrefersReducedMotion()
+
   return (
     <Canvas
       dpr={[1, 2]}
@@ -180,7 +184,7 @@ export function Stage(props: StageProps) {
       camera={{ position: [0, 0.2, 5.8], fov: 39 }}
       aria-label="Interactive three-dimensional gesture stage"
     >
-      <StageScene {...props} />
+      <StageScene {...props} reducedMotion={reducedMotion} />
     </Canvas>
   )
 }

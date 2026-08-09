@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { calculateTwoHandScale, calculateWristRotation, mapHandMotionToColor } from './domain/gestures'
 import { DJ_SHAPES, MATERIALS, MODES, type DjShape, type GestureFrame, type MaterialPreset, type Mode, type TrackedHand } from './domain/instrument'
 import { useHandTracking } from './hooks/useHandTracking'
+import { usePrefersReducedMotion } from './hooks/usePrefersReducedMotion'
 import { Stage } from './components/Stage'
 import './App.css'
 
@@ -25,11 +26,13 @@ function makeDemoLandmarks(x: number, y: number) {
 
 function useDemoFrame(mode: Mode) {
   const [tick, setTick] = useState(0)
+  const reducedMotion = usePrefersReducedMotion()
 
   useEffect(() => {
+    if (reducedMotion) return
     const timer = window.setInterval(() => setTick((value) => value + 1), 160)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [reducedMotion])
 
   return useMemo<GestureFrame>(() => {
     const x = 0.5 + Math.sin(tick * 0.07) * 0.28
@@ -69,6 +72,7 @@ function App() {
   })
   const activeFrame = inputSource === 'camera' ? cameraFrame : demoFrame
   const primaryHand = activeFrame.hands[0]
+  const primaryGesture = primaryHand?.gesture
   const fallbackHand = demoFrame.hands[0]
   const handForStage = primaryHand ?? fallbackHand
   const modeInfo = MODES[mode]
@@ -108,16 +112,16 @@ function App() {
   }, [inputSource, mode, primaryHand, showCue])
 
   useEffect(() => {
-    if (mode !== 'PHYSICS' || !primaryHand) return
-    if (primaryHand.gesture === 'open-palm') {
+    if (mode !== 'PHYSICS' || !primaryGesture) return
+    if (primaryGesture === 'open-palm') {
       setFrozen(true)
       showCue('Open palm / freeze field')
     }
-    if (primaryHand.gesture === 'fist') {
+    if (primaryGesture === 'fist') {
       setFrozen(false)
       showCue('Fist / release gravity')
     }
-  }, [mode, primaryHand, showCue])
+  }, [mode, primaryGesture, showCue])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -139,6 +143,12 @@ function App() {
     if (mode === 'PHYSICS') showCue('Pointer / particle burst', true)
     if (mode === 'SCULPT') showCue('Stage / surface selected')
     if (mode === 'DJ') showCue('Stage / signal sampled')
+  }
+
+  const handleStageKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    handleStagePointer()
   }
 
   const handleSource = (source: 'demo' | 'camera') => {
@@ -251,7 +261,7 @@ function App() {
             <div className="stage-title"><span className="live-mark" /> LIVE STAGE <span className="slash">/</span> {mode}</div>
             <div className="stage-toolbar-meta"><span>60 FPS TARGET</span><span className="toolbar-divider" /><span>{activeFrame.hands.length ? `${activeFrame.hands.length} HAND${activeFrame.hands.length > 1 ? 'S' : ''}` : 'SEARCHING'}</span></div>
           </div>
-          <div className="stage-shell" onClick={handleStagePointer} role="application" aria-label="Click to interact with the 3D stage">
+          <div className="stage-shell" onClick={handleStagePointer} onKeyDown={handleStageKeyDown} role="button" tabIndex={0} aria-label="Activate the 3D stage">
             <div className="stage-canvas"><Stage mode={mode} material={material} djShape={djShape} handPosition={{ x: handForStage.x, y: handForStage.y, depth: handForStage.depth, rotation: wristRotation, velocity: handForStage.velocity }} handScale={handScale} gesture={handForStage.gesture} frozen={frozen} cuePulse={cuePulse} /></div>
             <div className="stage-crosshair crosshair-top" aria-hidden="true" />
             <div className="stage-crosshair crosshair-bottom" aria-hidden="true" />
