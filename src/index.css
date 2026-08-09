@@ -1,0 +1,32 @@
+:root {
+  font-family: 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  color: #dce6dc;
+  background: #0d100e;
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --mono: 'SFMono-Regular', 'Roboto Mono', Consolas, 'Liberation Mono', monospace;
+  --display: 'Arial Narrow', 'Helvetica Neue', Arial, sans-serif;
+  --bg: #0d100e;
+  --panel: #121713;
+  --panel-raised: #171d18;
+  --line: #2b352d;
+  --line-bright: #3d4b3e;
+  --ink: #eef4ed;
+  --muted: #8c9a8d;
+  --dim: #5e6a60;
+  --signal: #c8ff35;
+  --signal-soft: rgba(200, 255, 53, 0.12);
+  --signal-line: rgba(200, 255, 53, 0.48);
+  --coral: #bd7359;
+}
+
+* { box-sizing: border-box; }
+html { min-width: 320px; background: var(--bg); }
+body { margin: 0; min-width: 320px; min-height: 100dvh; background: var(--bg); }
+button, input { font: inherit; }
+button { color: inherit; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+button { cursor: pointer; }
+#root { min-height: 100dvh; }
