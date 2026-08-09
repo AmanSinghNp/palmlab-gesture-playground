@@ -19,11 +19,11 @@ function makeHand({
   wristAngle?: number
   pinch?: boolean
 }): TrackedHand {
-  const landmarks = Array.from({ length: 21 }, () => point(x, 1 - y))
-  landmarks[0] = point(x, 1 - y)
-  landmarks[9] = point(x + Math.cos(wristAngle) * 0.2, 1 - y + Math.sin(wristAngle) * 0.2)
-  landmarks[4] = point(x - 0.04, 1 - y - 0.03)
-  landmarks[8] = point(pinch ? x + 0.04 : x + 0.16, 1 - y - 0.03)
+  const landmarks = Array.from({ length: 21 }, () => point(x, y))
+  landmarks[0] = point(x, y)
+  landmarks[9] = point(x + Math.cos(wristAngle) * 0.2, y + Math.sin(wristAngle) * 0.2)
+  landmarks[4] = point(x - 0.04, y + 0.03)
+  landmarks[8] = point(pinch ? x + 0.04 : x + 0.16, y + 0.03)
 
   return {
     id,

@@ -73,7 +73,7 @@ function ClaySphere({ controls, reducedMotion }: StageProps & { reducedMotion: b
     const position = controls.position
     group.current.position.set(
       (position.x - 0.5) * 2.35,
-      (position.y - 0.5) * -1.85,
+      (position.y - 0.5) * 1.85,
       -position.depth * 1.8,
     )
     group.current.scale.setScalar(controls.scale)

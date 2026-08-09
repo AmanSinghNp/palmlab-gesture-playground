@@ -36,6 +36,7 @@ export function useHandTracking({ enabled, onFrame }: UseHandTrackingOptions) {
     streamRef.current = null
     if (videoRef.current) videoRef.current.srcObject = null
     previousCenters.current.clear()
+    setError('')
     setStatus('idle')
   }, [])
 
@@ -107,7 +108,12 @@ export function useHandTracking({ enabled, onFrame }: UseHandTrackingOptions) {
         const result = activeLandmarker.detectForVideo(video, timestamp)
         const hands = result.landmarks.map((landmarks, index) => {
           const typedLandmarks = landmarks as NormalizedLandmark[]
-          const center = typedLandmarks[9] ?? typedLandmarks[0]
+          const displayLandmarks = typedLandmarks.map((landmark) => ({
+            x: 1 - landmark.x,
+            y: 1 - landmark.y,
+            z: landmark.z,
+          }))
+          const center = displayLandmarks[9] ?? displayLandmarks[0]
           const previous = previousCenters.current.get(index)
           const elapsed = previous ? Math.max(16, timestamp - previous.timestamp) : 100
           const velocity = previous
@@ -120,10 +126,10 @@ export function useHandTracking({ enabled, onFrame }: UseHandTrackingOptions) {
             gesture: classifyGesture(typedLandmarks, handedness),
             fingerCount: countExtendedFingers(typedLandmarks, handedness),
             x: center.x,
-            y: 1 - center.y,
+            y: center.y,
             depth: center.z ?? 0,
             velocity,
-            landmarks: typedLandmarks,
+            landmarks: displayLandmarks,
           }
         })
 

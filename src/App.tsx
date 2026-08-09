@@ -35,10 +35,11 @@ function App() {
   const activeFrame = inputSource === 'camera' ? cameraFrame : demoFrame
   const controls = useMemo(() => deriveClayControls(activeFrame.hands), [activeFrame.hands])
   const pinchCount = controls.pinchPoints.length
-  const handSpan = activeFrame.hands.length === 2
-    ? Math.hypot(activeFrame.hands[0].x - activeFrame.hands[1].x, activeFrame.hands[0].y - activeFrame.hands[1].y)
-    : null
+  const handSpan = activeFrame.hands.length === 2 ? controls.span : null
   const connectionLabel = inputSource === 'camera' ? cameraStatus.toUpperCase() : 'SIMULATED'
+  const cameraLabel = inputSource === 'camera'
+    ? cameraStatus === 'loading' ? 'LOADING…' : cameraStatus === 'live' ? 'CAMERA ON' : 'RETRY CAMERA'
+    : 'USE CAMERA'
   const stageCue = cameraError
     ? cameraError
     : inputSource === 'camera'
@@ -62,7 +63,7 @@ function App() {
         <div className="topbar-actions">
           <span className="build-label"><span className="status-dot" /> v0.5 / LOCAL</span>
           <button type="button" className="camera-button" onClick={() => handleSource(inputSource === 'camera' ? 'demo' : 'camera')} aria-pressed={inputSource === 'camera'}>
-            <span aria-hidden="true">◎</span> {inputSource === 'camera' ? 'CAMERA ON' : 'USE CAMERA'}
+            <span aria-hidden="true">◎</span> {cameraLabel}
           </button>
         </div>
       </header>

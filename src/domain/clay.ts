@@ -15,6 +15,7 @@ export interface ClayPoint {
 
 export interface ClayControls {
   position: ClayPosition
+  span: number
   scale: number
   rotation: number
   pinchPoints: ClayPoint[]
@@ -43,7 +44,7 @@ function pinchPoint(hand: TrackedHand): ClayPoint {
   if (thumb && index && [thumb.x, thumb.y, index.x, index.y].every(Number.isFinite)) {
     return {
       x: (thumb.x + index.x) / 2,
-      y: 1 - (thumb.y + index.y) / 2,
+      y: (thumb.y + index.y) / 2,
     }
   }
 
@@ -75,6 +76,7 @@ export function deriveClayControls(hands: readonly TrackedHand[], referenceSpan 
   if (pair.length === 0) {
     return {
       position: { ...DEFAULT_POSITION },
+      span: 0,
       scale: 1,
       rotation: 0,
       pinchPoints: [],
@@ -100,6 +102,7 @@ export function deriveClayControls(hands: readonly TrackedHand[], referenceSpan 
 
   return {
     position,
+    span: pair.length === 2 ? span : 0,
     scale,
     rotation: circularMean(rotations),
     pinchPoints,
@@ -108,16 +111,15 @@ export function deriveClayControls(hands: readonly TrackedHand[], referenceSpan 
 }
 
 function demoLandmarks(x: number, y: number, rotation: number, pinch: boolean) {
-  const yDown = 1 - y
-  const landmarks = Array.from({ length: 21 }, () => ({ x, y: yDown, z: 0 }))
-  landmarks[0] = { x, y: yDown, z: 0 }
+  const landmarks = Array.from({ length: 21 }, () => ({ x, y, z: 0 }))
+  landmarks[0] = { x, y, z: 0 }
   landmarks[9] = {
     x: x + Math.cos(rotation) * 0.18,
-    y: yDown + Math.sin(rotation) * 0.18,
+    y: y + Math.sin(rotation) * 0.18,
     z: 0,
   }
-  landmarks[4] = { x: x - 0.04, y: yDown - 0.03, z: 0 }
-  landmarks[8] = { x: x + (pinch ? 0.04 : 0.15), y: yDown - 0.03, z: 0 }
+  landmarks[4] = { x: x - 0.04, y: y + 0.03, z: 0 }
+  landmarks[8] = { x: x + (pinch ? 0.04 : 0.15), y: y + 0.03, z: 0 }
   return landmarks
 }
 
@@ -140,13 +142,16 @@ export function createDemoFrame(step: number): GestureFrame {
   const phase = safeStep % 3
   const drift = Math.sin(safeStep * 0.17) * 0.1
   const lift = Math.cos(safeStep * 0.13) * 0.06
+  const spread = 0.17 + (Math.sin(safeStep * 0.11) + 1) * 0.07
+  const roll = Math.sin(safeStep * 0.09) * 0.72
+  const handTilt = Math.sin(safeStep * 0.14) * 0.04
   const leftPinch = phase >= 1
   const rightPinch = phase === 2
 
   return {
     hands: [
-      demoHand('demo-left', 0.32 + drift, 0.54 + lift, -0.34, leftPinch, 0.22),
-      demoHand('demo-right', 0.68 + drift, 0.48 + lift, Math.PI + 0.24, rightPinch, 0.28),
+      demoHand('demo-left', 0.5 - spread + drift, 0.54 + lift + handTilt, roll - 0.12, leftPinch, 0.22),
+      demoHand('demo-right', 0.5 + spread + drift, 0.48 + lift - handTilt, roll + 0.12, rightPinch, 0.28),
     ],
     source: 'demo',
     timestamp: safeStep * 160,
